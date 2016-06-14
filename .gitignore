@@ -1,0 +1,5 @@
+mongo-data/
+node_modules
+mongo_data/*
+diagnostic.data/
+journal/
