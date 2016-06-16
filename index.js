@@ -2,87 +2,120 @@ var express = require('express');
 var bodyParser = require('body-parser');
 var User = require('./user-model');
 var passport = require('passport');
+var BasicStrategy = require('passport-http').BasicStrategy;
 var mongoose = require('mongoose');
-var app = express();
+var bcrypt = require('bcrypt');
 
+var app = express();
 app.use(passport.initialize());
 
 var jsonParser = bodyParser.json();
 
-var bcrypt = require('bcrypt');
-
-app.post('/users', jsonParser, function(req, res) {
-    if (!req.body) {
-        return res.status(400).json({
-            message: "No request body"
-        });
+var strategy = new BasicStrategy(function(username, password, callback) {
+  User.findOne({
+    username: username
+  }, function (err, user) {
+    if (err) {
+      callback(err);
+      return;
     }
 
-    if (!('username' in req.body)) {
-        return res.status(422).json({
-            message: 'Missing field: username'
-        });
+    if (!user) {
+      return callback(null, false, {
+        message: 'Incorrect username.'
+      });
     }
 
-    var username = req.body.username;
-
-    if (typeof username !== 'string') {
-        return res.status(422).json({
-            message: 'Incorrect field type: username'
-        });
-    }
-
-    username = username.trim();
-
-    if (username === '') {
-        return res.status(422).json({
-            message: 'Incorrect field length: username'
-        });
-    }
-
-    if (!('password' in req.body)) {
-        return res.status(422).json({
-            message: 'Missing field: password'
-        });
-    }
-
-    var password = req.body.password;
-
-    if (typeof password !== 'string') {
-        return res.status(422).json({
-            message: 'Incorrect field type: password'
-        });
-    }
-
-    password = password.trim();
-
-    if (password === '') {
-        return res.status(422).json({
-            message: 'Incorrect field length: password'
-        });
-    }
-
-    var user = new User({
-        username: username,
-        password: password
-    });
-
-    user.save(function(err) {
-        if (err) {
-            return res.status(500).json({
-                message: 'Internal server error'
-            });
-        }
-
-        return res.status(201).json({});
-    });
-
-    bcrypt.genSalt(10, function(err, salt) {
+    user.validatePassword(password, function(err, isValid) {
       if (err) {
-        return res.status(500).json({
-            message: 'Internal server error'
+        return callback(err);
+      }
+
+      if (!isValid) {
+        return callback(null, false, {
+          message: 'Incorrect password.'
         });
       }
+      return callback(null, user);
+    });
+  });
+});
+
+passport.use(strategy);
+
+app.get('/users/:username', jsonParser, function(req, res) {
+  var name = req.params.username;
+  console.log(req.params);
+  console.log(res);
+  res.json({message: "username is "+ name});
+});
+
+app.use(passport.initialize());
+
+app.get('/hidden', passport.authenticate('basic', {session: false}), function(req, res) {
+  res.json({
+    message: 'Luke... I am your father'
+  });
+});
+
+// post request end point
+app.post('/users', jsonParser, function(req, res) {
+  if (!req.body) {
+    return res.status(400).json({
+      message: "No request body"
+    });
+  }
+
+  if (!('username' in req.body)) {
+    return res.status(422).json({
+      message: 'Missing field: username'
+    });
+  }
+
+  var username = req.body.username;
+
+  if (typeof username !== 'string') {
+    return res.status(422).json({
+      message: 'Incorrect field type: username'
+    });
+  }
+
+  username = username.trim();
+
+  if (username === '') {
+    return res.status(422).json({
+      message: 'Incorrect field length: username'
+    });
+  }
+
+  if (!('password' in req.body)) {
+    return res.status(422).json({
+      message: 'Missing field: password'
+    });
+  }
+
+  var password = req.body.password;
+
+  if (typeof password !== 'string') {
+    return res.status(422).json({
+      message: 'Incorrect field type: password'
+    });
+  }
+
+  password = password.trim();
+
+  if (password === '') {
+    return res.status(422).json({
+      message: 'Incorrect field length: password'
+    });
+  }
+
+  bcrypt.genSalt(10, function(err, salt) {
+    if (err) {
+      return res.status(500).json({
+        message: 'Internal server error'
+      });
+    }
 
     bcrypt.hash(password, salt, function(err, hash) {
       if (err) {
@@ -102,14 +135,12 @@ app.post('/users', jsonParser, function(req, res) {
             message: 'Internal server error'
           });
         }
-
-        return res.status(201).json({});
+        return res.status(201).json({message: "user name is " + res.name});
       });
     });
   });
-
 });
 
 mongoose.connect('mongodb://localhost/auth').then(function() {
-    app.listen(8080);
+  app.listen(8080);
 });
